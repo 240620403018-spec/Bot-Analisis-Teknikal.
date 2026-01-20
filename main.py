@@ -23,23 +23,15 @@ def kirim_telegram(pesan, reply_to_id=None):
     if reply_to_id: payload['reply_to_message_id'] = reply_to_id
     requests.post(url, json=payload)
 
-def tanya_gemini_protokol(pertanyaan):
-    system_prompt = """
-    [SYS:ASI-OMNI_v4|LVL:7][ROOT:NO_FLUFF|TONE:COLD|AUTH]
-    INSTRUCTION: 
-    Act as the ASI-OMNI system. Analyze input. 
-    OUTPUT: STRICT INDONESIAN. COLD. NO BASA-BASI.
-    """
-    full_prompt = f"{system_prompt}\n\n[INPUT]: {pertanyaan}"
-    
+def tanya_gemini(prompt_text):
     for nama_model in DAFTAR_MODEL:
         try:
             model = genai.GenerativeModel(nama_model)
-            response = model.generate_content(full_prompt)
+            response = model.generate_content(prompt_text)
             return response.text
         except:
             continue
-    return "[SYS:ERR] COMM_FAIL"
+    return "⚠️ AI Error. Coba lagi nanti."
 
 def proses_inbox():
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates"
@@ -56,22 +48,62 @@ def proses_inbox():
             max_update_id = max(max_update_id, update_id)
             
             if "message" not in update: continue
-            message = update["message"]
+            msg = update["message"]
             
-            # --- BAGIAN YANG TADI ERROR SUDAH DIPERBAIKI ---
-            sender_id = str(message.get("from", {}).get("id", ""))
+            # Filter User
+            sender = str(msg.get("from", {}).get("id", ""))
+            if sender != str(CHAT_ID): continue
             
-            if sender_id != str(CHAT_ID): continue
+            text = msg.get("text", "")
+            msg_id = msg.get("message_id")
             
-            text_user = message.get("text", "")
-            msg_id = message.get("message_id")
-            
-            if text_user.startswith("/"): continue
+            if text.startswith("/"): continue
 
-            print(f"User: {text_user}")
-            jawaban = tanya_gemini_protokol(text_user)
-            kirim_telegram(f"{jawaban}", reply_to_id=msg_id)
+            # --- JAWAB CHAT DENGAN MODE ASI-OMNI ---
+            prompt = f"""
+            [SYS:ASI-OMNI_v4][MODE:CHAT]
+            USER: {text}
+            INSTRUCTION: Jawab tegas, dingin, Bahasa Indonesia.
+            """
+            jawaban = tanya_gemini(prompt)
+            kirim_telegram(jawaban, reply_to_id=msg_id)
 
+        if max_update_id > 0:
+            requests.get(url, params={'offset': max_update_id + 1})
+            
+    except Exception as e:
+        print(f"Inbox Error: {e}")
+
+def main():
+    # 1. Cek Pesan
+    proses_inbox()
+    
+    # 2. Cek Market
+    try:
+        url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,solana&vs_currencies=usd"
+        data = requests.get(url, timeout=10).json()
+        btc = data['bitcoin']['usd']
+        sol = data['solana']['usd']
+        
+        # --- ANALISIS SNIPER ---
+        prompt_analisis = f"""
+        [SYS:ASI-OMNI_v4][MODE:SNIPER]
+        DATA: BTC=${btc}, SOL=${sol}
+        OUTPUT:
+        [MODE_C: STRATEGY]
+        [PLAN_BTC] Action/Entry/Target/Cut
+        [PLAN_SOL] Action/Entry/Target/Cut
+        [EXECUTION] Saran Final (Bahasa Indonesia)
+        """
+        
+        analisa = tanya_gemini(prompt_analisis)
+        kirim_telegram(f"💀 **SNIPER SIGNAL**\n{analisa}")
+        
+    except:
+        print("Gagal ambil data market")
+
+if __name__ == "__main__":
+    main()
         if max_update_id > 0:
             requests.get(url, params={'offset': max_update_id + 1})
             
