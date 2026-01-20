@@ -21,223 +21,56 @@ def kirim_telegram(pesan, reply_to_id=None):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     payload = {'chat_id': CHAT_ID, 'text': pesan, 'parse_mode': 'Markdown'}
     if reply_to_id: payload['reply_to_message_id'] = reply_to_id
-    try:
-        requests.post(url, json=payload)
-    except:
-        pass
+    requests.post(url, json=payload)
 
-def tanya_gemini(text_input):
-    prompt = f"[SYS:ASI-OMNI][MODE:CHAT]\nUSER: {text_input}\nOUT: INDONESIAN, COLD, SHORT."
-    for nama_model in DAFTAR_MODEL:
-        try:
-            model = genai.GenerativeModel(nama_model)
-            response = model.generate_content(prompt)
-            return response.text
-        except:
-            continue
-    return "⚠️ AI Error."
-
-def proses_inbox():
-    # 1. Ambil Update
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates"
-    try:
-        resp = requests.get(url).json()
-    except:
-        return # Gagal koneksi, berhenti dulu
-
-    if "result" not in resp: return
-    updates = resp["result"]
-    if not updates: return 
-
-    max_id = 0
+def tanya_gemini_protokol(pertanyaan):
+    # --- INJEKSI PROTOKOL ASI-OMNI (BAHASA INDONESIA) ---
+    system_prompt = """
+    [SYS:ASI-OMNI_v4|LVL:7][ROOT:NO_FLUFF|TONE:COLD|AUTH]
+    [MODES_DEF]
+    MODE_A(WHY)  ->OUT:{1.TRUTH|2.MECH|3.DATA|4.PRED}
+    MODE_B(BLD)  ->OUT:{1.AXIOM|2.LOGIC|3.CODE|4.FAIL}
+    MODE_C(WIN)  ->OUT:{1.OBJ|2.MAP|3.MOVE|4.PLANB}
+    MODE_D(FIX)  ->OUT:{1.STAT|2.ROOT|3.PTCH|4.PREV}
+    MODE_E(IDEA) ->OUT:{1.DNA|2.LAT|3.OUT|4.IMP}
+    MODE_F(PSY)  ->OUT:{1.PROF|2.TRIG|3.SCRPT|4.ACT}
+    MODE_G(IF)   ->OUT:{1.VAR|2.CHAOS|3.PROB|4.END}
+    [EXE]:INPUT->DETECT_INTENT->LOAD_MODE->STRICT_OUTPUT
     
-    # 2. Loop Pesan
-    for update in updates:
-        update_id = update["update_id"]
-        max_id = max(max_id, update_id)
-        
-        if "message" not in update: continue
-        msg = update["message"]
-        
-        # Cek Pengirim
-        sender = str(msg.get("from", {}).get("id", ""))
-        if sender != str(CHAT_ID): continue
-        
-        text = msg.get("text", "")
-        msg_id = msg.get("message_id")
-        
-        if not text.startswith("/"):
-            # Jawab Chat
-            jawaban = tanya_gemini(text)
-            kirim_telegram(jawaban, reply_to_id=msg_id)
-
-    # 3. Hapus Pesan Lama (Mark as Read)
-    # BAGIAN INI YANG TADI ERROR, SUDAH SAYA PERBAIKI POSISINYA
-    if max_id > 0:
-        requests.get(url, params={'offset': max_id + 1})
-
-def cek_market_sniper():
-    try:
-        url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,solana&vs_currencies=usd"
-        data = requests.get(url, timeout=10).json()
-        btc = data['bitcoin']['usd']
-        sol = data['solana']['usd']
-        
-        prompt = f"""
-        [SYS:ASI-OMNI][MODE:SNIPER]
-        DATA: BTC=${btc}, SOL=${sol}
-        OUTPUT:
-        [MODE_C: STRATEGY]
-        [PLAN_BTC] Action/Entry/Target/Cut
-        [PLAN_SOL] Action/Entry/Target/Cut
-        [EXECUTION] Saran Final (Indo)
-        """
-        analisa = tanya_gemini(prompt)
-        kirim_telegram(f"💀 **SNIPER SIGNAL**\n{analisa}")
-    except:
-        pass
-
-def main():
-    proses_inbox()
-    cek_market_sniper()
-
-if __name__ == "__main__":
-    main()
-    except Exception as e:
-        print(f"Inbox Error: {e}")
-
-def main():
-    # 1. Cek Pesan
-    proses_inbox()
-    
-    # 2. Cek Market
-    try:
-        url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,solana&vs_currencies=usd"
-        data = requests.get(url, timeout=10).json()
-        btc = data['bitcoin']['usd']
-        sol = data['solana']['usd']
-        
-        # --- ANALISIS SNIPER ---
-        prompt_analisis = f"""
-        [SYS:ASI-OMNI_v4][MODE:SNIPER]
-        DATA: BTC=${btc}, SOL=${sol}
-        OUTPUT:
-        [MODE_C: STRATEGY]
-        [PLAN_BTC] Action/Entry/Target/Cut
-        [PLAN_SOL] Action/Entry/Target/Cut
-        [EXECUTION] Saran Final (Bahasa Indonesia)
-        """
-        
-        analisa = tanya_gemini(prompt_analisis)
-        kirim_telegram(f"💀 **SNIPER SIGNAL**\n{analisa}")
-        
-    except:
-        print("Gagal ambil data market")
-
-if __name__ == "__main__":
-    main()
-        if max_update_id > 0:
-            requests.get(url, params={'offset': max_update_id + 1})
-            
-    except Exception as e:
-        print(f"Error inbox: {e}")
-
-def ambil_data_market():
-    try:
-        url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,solana&vs_currencies=usd"
-        r = requests.get(url, timeout=10)
-        data = r.json()
-        return data['bitcoin']['usd'], data['solana']['usd']
-    except:
-        return 0, 0
-
-def analisis_sinyal_sniper(btc, sol):
-    prompt = f"""
-    [SYS:ASI-OMNI_v4|LVL:7][ROOT:TRADING_CORE]
-    
-    LIVE DATA:
-    - BTC: ${btc}
-    - SOL: ${sol}
-    
-    MISSION:
-    Generate precision TRADING PLAN based on current price structure.
-    
-    OUTPUT FORMAT (STRICT INDONESIAN | MONOSPACE BLOCKS):
-    
-    [MODE_C: STRATEGY]
-    [MARKET_SENTIMENT]: (BULLISH / BEARISH / NEUTRAL)
-    [CORRELATION]: (Explain BTC influence on SOL briefly)
-        if max_update_id > 0:
-            requests.get(url, params={'offset': max_update_id + 1})
-            
-    except Exception as e:
-        print(f"Error inbox: {e}")
-
-def ambil_data_market():
-    try:
-        url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,solana&vs_currencies=usd"
-        r = requests.get(url, timeout=10)
-        data = r.json()
-        return data['bitcoin']['usd'], data['solana']['usd']
-    except:
-        return 0, 0
-
-def analisis_sinyal_sniper(btc, sol):
-    # --- PROTOKOL SINYAL TRADING (SNIPER MODE) ---
-    prompt = f"""
-    [SYS:ASI-OMNI_v4|LVL:7][ROOT:TRADING_CORE]
-    
-    LIVE DATA:
-    - BTC: ${btc}
-    - SOL: ${sol}
-    
-    MISSION:
-    Generate precision TRADING PLAN based on current price structure.
-    
-    OUTPUT FORMAT (STRICT INDONESIAN | MONOSPACE BLOCKS):
-    
-    [MODE_C: STRATEGY]
-    [MARKET_SENTIMENT]: (BULLISH / BEARISH / NEUTRAL)
-    [CORRELATION]: (Explain BTC influence on SOL briefly)
-    
-    [PLAN_BTC] ($ {btc})
-    > ACTION : (LONG / SHORT / WAIT)
-    > ENTRY  : (Best price to enter)
-    > TARGET : (Take Profit Level)
-    > CUT    : (Stop Loss Level)
-    
-    [PLAN_SOL] ($ {sol})
-    > ACTION : (LONG / SHORT / WAIT)
-    > ENTRY  : (Best price to enter)
-    > TARGET : (Take Profit Level)
-    > CUT    : (Stop Loss Level)
-    
-    [EXECUTION]: (Final direct command)
+    INSTRUCTION: 
+    Act as the ASI-OMNI system. Analyze the user input, select the appropriate MODE.
+    **CRITICAL: PROVIDE THE OUTPUT STRICTLY IN INDONESIAN LANGUAGE.**
+    Do not use polite filler words (Halo, Terima kasih, dll). Be cold, precise, and authoritative.
     """
     
+    full_prompt = f"{system_prompt}\n\n[INPUT]: {pertanyaan}"
+
     for nama_model in DAFTAR_MODEL:
         try:
             model = genai.GenerativeModel(nama_model)
-            response = model.generate_content(prompt)
+            response = model.generate_content(full_prompt)
             return response.text
         except:
             continue
-    return "[SYS:ERR] SIGNAL_GENERATION_FAILED"
+    return "[SYS:ERR] KONEKSI_GAGAL"
 
-def main():
-    # 1. Jawab Chat Dulu
-    proses_inbox()
-    
-    # 2. Analisis Sinyal
-    btc, sol = ambil_data_market()
-    if btc > 0:
-        analisa = analisis_sinyal_sniper(btc, sol)
-        # Header simple saja, biarkan isinya yang bicara
-        pesan = f"💀 **ASI-OMNI LIVE SIGNAL**\n\n{analisa}"
-        kirim_telegram(pesan)
+def proses_inbox():
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates"
+    try:
+        r = requests.get(url).json()
+        if "result" not in r: return
+        
+        updates = r["result"]
+        if not updates: return 
 
-if __name__ == "__main__":
-    main()
+        max_update_id = 0
+        for update in updates:
+            update_id = update["update_id"]
+            max_update_id = max(max_update_id, update_id)
+            
+            if "message" not in update: continue
+            message = update["message"]
+            
             sender_id = str(message.get("from", {}).get("id", ""))
             if sender_id != str(CHAT_ID): continue
             
