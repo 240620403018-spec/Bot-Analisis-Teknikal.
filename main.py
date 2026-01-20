@@ -3,11 +3,12 @@ import os
 import google.generativeai as genai
 import time
 
-# --- 1. SETUP KUNCI ---
+# --- 1. SETUP ---
 TELEGRAM_TOKEN = os.environ['TELEGRAM_TOKEN']
 CHAT_ID = os.environ['CHAT_ID']
 GEMINI_API_KEY = os.environ['GEMINI_API_KEY']
 
+# Kita coba pakai model yang paling umum (gemini-pro) agar lebih stabil
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel('gemini-1.5-flash')
 
@@ -16,48 +17,52 @@ def kirim_telegram(pesan):
     payload = {'chat_id': CHAT_ID, 'text': pesan, 'parse_mode': 'Markdown'}
     requests.post(url, json=payload)
 
-def ambil_harga_bitcoin():
-    # KITA PAKAI COINGECKO (Lebih stabil untuk bot)
-    url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
+def ambil_harga():
+    # Gunakan CoinGecko (Stabil)
     try:
-        response = requests.get(url, timeout=10)
-        data = response.json()
-        return data['bitcoin']['usd']
-    except Exception:
-        # Cadangan jika CoinGecko sibuk, kita coba Binance lagi
-        url_cadangan = "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
-        response = requests.get(url_cadangan, timeout=10)
-        data = response.json()
-        return float(data['price'])
+        url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
+        r = requests.get(url, timeout=10)
+        return r.json()['bitcoin']['usd']
+    except:
+        return 0 # Gagal ambil harga
 
 def analisis_ai(harga):
+    # INI PROMPT AGAR GAYA BICARA SEPERTI SAYA (ANALYST)
     prompt = f"""
-    Kamu adalah trader profesional. Harga BTC sekarang ${harga}.
-    Berikan komentar pasar 1 kalimat pendek yang berwibawa tentang level harga ini.
-    Akhiri dengan emoji yang cocok.
+    Bertindaklah sebagai Senior Crypto Analyst. Harga Bitcoin sekarang: ${harga:,.2f}.
+    
+    Berikan analisis teknikal singkat (poin-poin) dalam Bahasa Indonesia:
+    1. 🐂/🐻 Bias: (Bullish/Bearish/Neutral)
+    2. 🧱 Key Level: (Perkirakan Support & Resistance terdekat dari angka psikologis harga tersebut)
+    3. 💡 Saran Action: (Wait and See / DCA / Take Profit)
+    
+    Jawab dengan tegas, singkat, dan profesional tanpa basa-basi.
     """
     try:
         response = model.generate_content(prompt)
         return response.text
-    except:
-        return "Pasar sedang volatile. Tetap waspada! ⚠️"
+    except Exception as e:
+        # PENTING: Jika error, kita kirim pesan error aslinya agar ketahuan
+        return f"ERROR_AI: {e}"
 
 def main():
-    try:
-        # 1. Ambil Harga
-        harga = ambil_harga_bitcoin()
-        
-        # 2. Analisis
-        komentar = analisis_ai(harga)
-        
-        # 3. Kirim Laporan
-        pesan = f"💎 **BITCOIN UPDATE**\nPrice: `${harga:,.2f}`\n\n💬 {komentar}"
-        kirim_telegram(pesan)
-        print("Sukses kirim laporan!")
-        
-    except Exception as e:
-        print(f"Error: {e}")
-        kirim_telegram(f"⚠️ Gagal ambil data: {e}")
+    harga = ambil_harga()
+    
+    if harga == 0:
+        kirim_telegram("⚠️ Gagal mengambil data harga dari CoinGecko.")
+        return
+
+    analisa = analisis_ai(harga)
+    
+    # Cek apakah AI Error atau Sukses
+    if "ERROR_AI" in analisa:
+        # Kirim pesan error ke Telegram
+        pesan = f"⚠️ **AI GAGAL MERESPON**\n\nPenyebab: `{analisa}`\n\n*Solusi: Cek GEMINI_API_KEY di GitHub Secrets Anda.*"
+    else:
+        # Kirim Analisis Keren
+        pesan = f"💎 **BTC MARKET UPDATE**\nPrice: `${harga:,.2f}`\n\n{analisa}"
+
+    kirim_telegram(pesan)
 
 if __name__ == "__main__":
     main()
