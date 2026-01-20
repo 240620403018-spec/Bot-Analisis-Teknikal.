@@ -1,70 +1,36 @@
 import requests
 import os
-import google.generativeai as genai
 
-# --- 1. MENGAMBIL KUNCI RAHASIA ---
+# --- AMBIL KUNCI ---
 TELEGRAM_TOKEN = os.environ['TELEGRAM_TOKEN']
 CHAT_ID = os.environ['CHAT_ID']
-GEMINI_API_KEY = os.environ['GEMINI_API_KEY']
 
-# --- 2. SETUP OTAK GEMINI ---
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash')
+print(f"➡️ Sedang mencoba kirim pesan ke ID: {CHAT_ID}")
 
-# Target Aset (Bitcoin)
-SYMBOL = "BTCUSDT"
-URL_BINANCE = f"https://api.binance.com/api/v3/ticker/price?symbol={SYMBOL}"
-
-def kirim_telegram(pesan):
+def kirim_test():
+    # Kita tes kirim pesan sederhana tanpa AI dulu
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {'chat_id': CHAT_ID, 'text': pesan, 'parse_mode': 'Markdown'} 
-    requests.post(url, json=payload)
-
-def tanya_gemini_teknikal(harga):
-    """
-    Prompt ini dirancang untuk memaksa AI berpikir teknis.
-    """
-    prompt = f"""
-    Anda adalah Senior Technical Analyst (Chartered Market Technician).
-    Harga Bitcoin (BTC) saat ini berada di level: ${harga}.
+    pesan = "🔔 TES KONEKSI: Halo bos! Jika pesan ini masuk, berarti setingan aman."
     
-    Tugas Anda:
-    1. Analisis posisi harga ini terhadap level psikologis terdekat (misal: angka bulat seperti 90k, 95k, 100k).
-    2. Berikan asumsi singkat tentang struktur pasar (Bullish/Bearish) berdasarkan harga tersebut.
-    3. Gunakan istilah teknikal yang valid (contoh: Support, Resistance, Rejection, Breakout, Consolidation).
-    4. JANGAN berikan saran keuangan, tapi berikan 'Bias Pasar'.
+    payload = {
+        'chat_id': CHAT_ID,
+        'text': pesan
+    }
     
-    Format Output (Singkat & Padat):
-    📊 **STATUS TEKNIKAL**
-    • Zona Harga: [Isi analisis]
-    • Key Level: [Sebutkan angka terdekat]
-    • Bias: [BULLISH / BEARISH / NEUTRAL]
-    """
+    # Kirim Request
+    response = requests.post(url, json=payload)
     
-    try:
-        response = model.generate_content(prompt)
-        return response.text
-    except Exception as e:
-        return f"Gagal melakukan analisis teknikal: {e}"
-
-def cek_pasar():
-    try:
-        # Ambil Data
-        response = requests.get(URL_BINANCE)
-        data = response.json()
-        harga = float(data['price'])
-        
-        # Analisis AI
-        analisis = tanya_gemini_teknikal(harga)
-        
-        # Kirim Laporan
-        pesan = f"🚨 **BTC/USDT UPDATE**\nPrice: `${harga:,.2f}`\n\n{analisis}"
-        kirim_telegram(pesan)
-        print("Analisis teknikal terkirim.")
-        
-    except Exception as e:
-        print(f"System Error: {e}")
+    # Cek Jawaban Telegram (Jujur-jujuran)
+    print(f"➡️ Kode Status: {response.status_code}")
+    print(f"➡️ Jawaban Telegram: {response.text}")
+    
+    if response.status_code == 200:
+        print("✅ SUKSES! Pesan terkirim.")
+    else:
+        # Jika gagal, kita paksa Error agar GitHub jadi MERAH
+        print("❌ GAGAL! Periksa 'Jawaban Telegram' di atas untuk tahu sebabnya.")
+        raise Exception("Gagal mengirim pesan ke Telegram")
 
 if __name__ == "__main__":
-    cek_pasar()
-  
+    kirim_test()
+    
