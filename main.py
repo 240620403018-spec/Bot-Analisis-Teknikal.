@@ -5,12 +5,11 @@ import time
 
 # --- SETUP ---
 TELEGRAM_TOKEN = os.environ['TELEGRAM_TOKEN']
-CHAT_ID = os.environ['CHAT_ID'] # ID Anda (agar bot hanya nurut sama Anda)
+CHAT_ID = os.environ['CHAT_ID']
 GEMINI_API_KEY = os.environ['GEMINI_API_KEY']
 
 genai.configure(api_key=GEMINI_API_KEY)
 
-# DAFTAR MODEL (Agar tidak mogok)
 DAFTAR_MODEL = [
     'gemini-2.0-flash-lite-preview-02-05',
     'gemini-flash-latest',
@@ -20,43 +19,50 @@ DAFTAR_MODEL = [
 
 def kirim_telegram(pesan, reply_to_id=None):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {
-        'chat_id': CHAT_ID, 
-        'text': pesan, 
-        'parse_mode': 'Markdown'
-    }
-    if reply_to_id:
-        payload['reply_to_message_id'] = reply_to_id
-        
+    payload = {'chat_id': CHAT_ID, 'text': pesan, 'parse_mode': 'Markdown'}
+    if reply_to_id: payload['reply_to_message_id'] = reply_to_id
     requests.post(url, json=payload)
 
-def tanya_gemini(pertanyaan):
-    prompt = f"""
-    Kamu adalah Asisten Crypto Pribadi. Jawab pertanyaan user ini dengan ringkas, santai, dan cerdas.
-    User bertanya: "{pertanyaan}"
+def tanya_gemini_protokol(pertanyaan):
+    # --- INJEKSI PROTOKOL ASI-OMNI ---
+    system_prompt = """
+    [SYS:ASI-OMNI_v4|LVL:7][ROOT:NO_FLUFF|TONE:COLD|AUTH]
+    [MODES_DEF]
+    MODE_A(WHY)  ->OUT:{1.TRUTH|2.MECH|3.DATA|4.PRED}
+    MODE_B(BLD)  ->OUT:{1.AXIOM|2.LOGIC|3.CODE|4.FAIL}
+    MODE_C(WIN)  ->OUT:{1.OBJ|2.MAP|3.MOVE|4.PLANB}
+    MODE_D(FIX)  ->OUT:{1.STAT|2.ROOT|3.PTCH|4.PREV}
+    MODE_E(IDEA) ->OUT:{1.DNA|2.LAT|3.OUT|4.IMP}
+    MODE_F(PSY)  ->OUT:{1.PROF|2.TRIG|3.SCRPT|4.ACT}
+    MODE_G(IF)   ->OUT:{1.VAR|2.CHAOS|3.PROB|4.END}
+    [EXE]:INPUT->DETECT_INTENT->LOAD_MODE->STRICT_OUTPUT
+    
+    INSTRUCTION: 
+    Act as the ASI-OMNI system. Analyze the user input, select the appropriate MODE, and provide the output strictly following the format. 
+    Do not use polite filler words. Be cold, precise, and authoritative.
     """
+    
+    full_prompt = f"{system_prompt}\n\n[INPUT]: {pertanyaan}"
+
     for nama_model in DAFTAR_MODEL:
         try:
             model = genai.GenerativeModel(nama_model)
-            response = model.generate_content(prompt)
+            response = model.generate_content(full_prompt)
             return response.text
         except:
             continue
-    return "Maaf bos, otak saya lagi error koneksi."
+    return "[SYS:ERR] CONNECTION_FAILED"
 
 def proses_inbox():
-    # 1. Cek Pesan Masuk (Inbox)
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates"
     try:
         r = requests.get(url).json()
         if "result" not in r: return
         
         updates = r["result"]
-        if not updates: return # Gak ada pesan baru
+        if not updates: return 
 
         max_update_id = 0
-        
-        # 2. Baca satu per satu
         for update in updates:
             update_id = update["update_id"]
             max_update_id = max(max_update_id, update_id)
@@ -64,35 +70,26 @@ def proses_inbox():
             if "message" not in update: continue
             message = update["message"]
             
-            # Cek pengirim (Hanya balas pesan dari Anda, bukan orang asing)
-            # Kita bandingkan dengan str(CHAT_ID)
+            # Filter User
             sender_id = str(message.get("from", {}).get("id", ""))
-            
-            if sender_id != str(CHAT_ID):
-                continue # Abaikan pesan orang lain
+            if sender_id != str(CHAT_ID): continue
             
             text_user = message.get("text", "")
             msg_id = message.get("message_id")
 
-            # Jangan balas perintah /start
             if text_user.startswith("/"): continue
 
-            # 3. Tanya Gemini
-            print(f"📩 Ada pertanyaan: {text_user}")
-            jawaban = tanya_gemini(text_user)
-            
-            # 4. Kirim Balasan
-            kirim_telegram(f"🤖 **JAWABAN AI:**\n{jawaban}", reply_to_id=msg_id)
+            # Tanya AI dengan Protokol Baru
+            jawaban = tanya_gemini_protokol(text_user)
+            kirim_telegram(f"{jawaban}", reply_to_id=msg_id)
 
-        # 5. HAPUS PESAN LAMA (Agar tidak dibalas ulang terus-menerus)
-        # Kita panggil getUpdates lagi dengan offset baru untuk "Mark as Read"
+        # Mark as read
         if max_update_id > 0:
             requests.get(url, params={'offset': max_update_id + 1})
             
     except Exception as e:
-        print(f"Error baca inbox: {e}")
+        print(f"Error inbox: {e}")
 
-# --- FUNGSI MARKET SEBELUMNYA ---
 def ambil_data_market():
     try:
         url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,solana&vs_currencies=usd"
@@ -103,11 +100,12 @@ def ambil_data_market():
         return 0, 0
 
 def analisis_market(btc, sol):
+    # Analisis Market juga kita buat bergaya OMNI
     prompt = f"""
-    Analisa singkat market crypto (Bahasa Indo):
-    BTC: ${btc:,.0f}, SOL: ${sol:,.0f}.
-    Fokus ke korelasi BTC-SOL. Sinyal Bullish/Bearish?
-    Buat dalam tabel Markdown.
+    [SYS:ASI-OMNI_v4]
+    DATA: BTC=${btc}, SOL=${sol}
+    TASK: Analyze BTC-SOL correlation.
+    OUTPUT: Strict technical analysis. No fluff.
     """
     for nama_model in DAFTAR_MODEL:
         try:
@@ -116,17 +114,15 @@ def analisis_market(btc, sol):
             return response.text
         except:
             continue
-    return "Gagal analisis."
+    return "[SYS:ERR] MARKET_ANALYSIS_FAIL"
 
 def main():
-    # TUGAS 1: Jawab pertanyaan user dulu (Prioritas)
     proses_inbox()
     
-    # TUGAS 2: Lanjut kirim update market rutin
     btc, sol = ambil_data_market()
     if btc > 0:
         analisa = analisis_market(btc, sol)
-        pesan = f"🔥 **MARKET UPDATE**\nBTC: `${btc}` | SOL: `${sol}`\n\n{analisa}"
+        pesan = f"[MARKET_DATA]\nBTC: `{btc}`\nSOL: `{sol}`\n\n{analisa}"
         kirim_telegram(pesan)
 
 if __name__ == "__main__":
