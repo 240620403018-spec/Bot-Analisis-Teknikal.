@@ -1,62 +1,37 @@
-import requests
-import os
 import google.generativeai as genai
+import os
+import requests
 
-# --- 1. SETUP ---
+# --- SETUP ---
 TELEGRAM_TOKEN = os.environ['TELEGRAM_TOKEN']
 CHAT_ID = os.environ['CHAT_ID']
 GEMINI_API_KEY = os.environ['GEMINI_API_KEY']
 
-# KITA GANTI KE 'gemini-pro' (Versi paling stabil & umum)
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-pro')
 
 def kirim_telegram(pesan):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {'chat_id': CHAT_ID, 'text': pesan, 'parse_mode': 'Markdown'}
+    payload = {'chat_id': CHAT_ID, 'text': pesan}
     requests.post(url, json=payload)
 
-def ambil_harga():
+def cek_daftar_model():
     try:
-        # Ambil harga dari CoinGecko
-        url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
-        r = requests.get(url, timeout=10)
-        return r.json()['bitcoin']['usd']
-    except:
-        return 0
+        # Kita tanya ke Google: "Sebutkan model yang saya boleh pakai!"
+        daftar_model = []
+        for m in genai.list_models():
+            if 'generateContent' in m.supported_generation_methods:
+                # Kita bersihkan namanya (hapus 'models/') biar rapi
+                nama_bersih = m.name.replace('models/', '')
+                daftar_model.append(nama_bersih)
+        
+        if not daftar_model:
+            return "❌ GAWAT: Google bilang tidak ada model yang tersedia untuk API Key ini. Coba bikin Key baru di Google AI Studio."
+            
+        return "✅ MODEL YANG TERSEDIA:\n- " + "\n- ".join(daftar_model)
 
-def analisis_ai(harga):
-    prompt = f"""
-    Kamu adalah Crypto Analyst. Harga Bitcoin: ${harga:,.2f}.
-    Berikan analisis singkat (Bahasa Indonesia):
-    1. Tren: (Bullish/Bearish)
-    2. Support & Resistance terdekat.
-    3. Saran: (Beli/Jual/Tahan)
-    
-    Jangan terlalu panjang, to the point saja.
-    """
-    try:
-        response = model.generate_content(prompt)
-        return response.text
     except Exception as e:
-        return f"ERROR_AI: {e}"
-
-def main():
-    harga = ambil_harga()
-    
-    if harga == 0:
-        kirim_telegram("⚠️ Gagal koneksi ke CoinGecko.")
-        return
-
-    analisa = analisis_ai(harga)
-    
-    # Format Pesan
-    if "ERROR_AI" in analisa:
-        pesan = f"⚠️ **AI ERROR**\n`{analisa}`"
-    else:
-        pesan = f"💎 **BTC UPDATE**\nPrice: `${harga:,.2f}`\n\n{analisa}"
-
-    kirim_telegram(pesan)
+        return f"⚠️ ERROR SAAT CEK MODEL:\n{e}"
 
 if __name__ == "__main__":
-    main()
+    laporan = cek_daftar_model()
+    kirim_telegram(laporan)
