@@ -24,7 +24,6 @@ def kirim_telegram(pesan, reply_to_id=None):
     requests.post(url, json=payload)
 
 def tanya_gemini_protokol(pertanyaan):
-    # --- PROTOKOL JAWAB CHAT (ASI-OMNI) ---
     system_prompt = """
     [SYS:ASI-OMNI_v4|LVL:7][ROOT:NO_FLUFF|TONE:COLD|AUTH]
     INSTRUCTION: 
@@ -58,6 +57,8 @@ def proses_inbox():
             
             if "message" not in update: continue
             message = update["message"]
+            
+            # --- BAGIAN YANG TADI ERROR SUDAH DIPERBAIKI ---
             sender_id = str(message.get("from", {}).get("id", ""))
             
             if sender_id != str(CHAT_ID): continue
@@ -71,6 +72,37 @@ def proses_inbox():
             jawaban = tanya_gemini_protokol(text_user)
             kirim_telegram(f"{jawaban}", reply_to_id=msg_id)
 
+        if max_update_id > 0:
+            requests.get(url, params={'offset': max_update_id + 1})
+            
+    except Exception as e:
+        print(f"Error inbox: {e}")
+
+def ambil_data_market():
+    try:
+        url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,solana&vs_currencies=usd"
+        r = requests.get(url, timeout=10)
+        data = r.json()
+        return data['bitcoin']['usd'], data['solana']['usd']
+    except:
+        return 0, 0
+
+def analisis_sinyal_sniper(btc, sol):
+    prompt = f"""
+    [SYS:ASI-OMNI_v4|LVL:7][ROOT:TRADING_CORE]
+    
+    LIVE DATA:
+    - BTC: ${btc}
+    - SOL: ${sol}
+    
+    MISSION:
+    Generate precision TRADING PLAN based on current price structure.
+    
+    OUTPUT FORMAT (STRICT INDONESIAN | MONOSPACE BLOCKS):
+    
+    [MODE_C: STRATEGY]
+    [MARKET_SENTIMENT]: (BULLISH / BEARISH / NEUTRAL)
+    [CORRELATION]: (Explain BTC influence on SOL briefly)
         if max_update_id > 0:
             requests.get(url, params={'offset': max_update_id + 1})
             
