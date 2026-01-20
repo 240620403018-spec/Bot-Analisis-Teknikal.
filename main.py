@@ -1,59 +1,63 @@
 import requests
 import os
 import google.generativeai as genai
+import time
 
-# --- 1. AMBIL KUNCI RAHASIA ---
+# --- 1. SETUP KUNCI ---
 TELEGRAM_TOKEN = os.environ['TELEGRAM_TOKEN']
 CHAT_ID = os.environ['CHAT_ID']
 GEMINI_API_KEY = os.environ['GEMINI_API_KEY']
 
-# --- 2. SETUP OTAK GEMINI ---
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel('gemini-1.5-flash')
 
 def kirim_telegram(pesan):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    # Kita pakai Markdown agar tulisan bisa tebal/miring
-    payload = {'chat_id': CHAT_ID, 'text': pesan, 'parse_mode': 'Markdown'} 
+    payload = {'chat_id': CHAT_ID, 'text': pesan, 'parse_mode': 'Markdown'}
     requests.post(url, json=payload)
 
-def analisis_teknikal(harga):
+def ambil_harga_bitcoin():
+    # KITA PAKAI COINGECKO (Lebih stabil untuk bot)
+    url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
+    try:
+        response = requests.get(url, timeout=10)
+        data = response.json()
+        return data['bitcoin']['usd']
+    except Exception:
+        # Cadangan jika CoinGecko sibuk, kita coba Binance lagi
+        url_cadangan = "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
+        response = requests.get(url_cadangan, timeout=10)
+        data = response.json()
+        return float(data['price'])
+
+def analisis_ai(harga):
     prompt = f"""
-    Kamu adalah Senior Technical Analyst.
-    Harga Bitcoin (BTC) saat ini: ${harga}.
-    
-    Berikan update pasar singkat (maksimal 50 kata) dengan gaya profesional:
-    1. Tentukan Bias (Bullish/Bearish/Sideways).
-    2. Sebutkan Key Level (Support/Resistance) terdekat.
-    3. Rekomendasi singkat (Wait and See / Accumulate / Take Profit).
-    
-    Gunakan emoji yang relevan.
+    Kamu adalah trader profesional. Harga BTC sekarang ${harga}.
+    Berikan komentar pasar 1 kalimat pendek yang berwibawa tentang level harga ini.
+    Akhiri dengan emoji yang cocok.
     """
     try:
         response = model.generate_content(prompt)
         return response.text
-    except Exception as e:
-        return f"⚠️ Maaf, AI sedang pusing: {e}"
+    except:
+        return "Pasar sedang volatile. Tetap waspada! ⚠️"
 
-def cek_pasar():
+def main():
     try:
-        # 1. Ambil Harga Real-time Binance
-        r = requests.get("https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT")
-        data = r.json()
-        harga = float(data['price'])
+        # 1. Ambil Harga
+        harga = ambil_harga_bitcoin()
         
-        # 2. Minta Pendapat AI
-        hasil_analisis = analisis_teknikal(harga)
+        # 2. Analisis
+        komentar = analisis_ai(harga)
         
         # 3. Kirim Laporan
-        pesan_final = f"🚨 **BTC MARKET ALERT**\nPrice: `${harga:,.2f}`\n\n{hasil_analisis}"
-        kirim_telegram(pesan_final)
-        print("Laporan terkirim!")
+        pesan = f"💎 **BITCOIN UPDATE**\nPrice: `${harga:,.2f}`\n\n💬 {komentar}"
+        kirim_telegram(pesan)
+        print("Sukses kirim laporan!")
         
     except Exception as e:
         print(f"Error: {e}")
-        # Kirim notifikasi error ke HP jika ada masalah fatal
-        kirim_telegram(f"⚠️ Bot Error: {e}")
+        kirim_telegram(f"⚠️ Gagal ambil data: {e}")
 
 if __name__ == "__main__":
-    cek_pasar()
+    main()
