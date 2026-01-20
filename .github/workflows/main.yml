@@ -1,0 +1,30 @@
+name: Bot Crypto Otomatis
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'  # Jalan otomatis setiap 15 menit
+  workflow_dispatch:        # Tombol manual untuk tes
+
+jobs:
+  jalankan-analisis:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ambil Kode
+        uses: actions/checkout@v2
+
+      - name: Siapkan Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'
+
+      - name: Install Persyaratan
+        run: pip install -r requirements.txt
+
+      - name: Jalankan Bot
+        env:
+          # KIRI: Nama di Python = KANAN: Nama di Secrets GitHub Anda
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python main.py
+        
