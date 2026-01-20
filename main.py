@@ -1,15 +1,16 @@
 import requests
 import os
 import google.generativeai as genai
+import time
 
 # --- 1. SETUP ---
 TELEGRAM_TOKEN = os.environ['TELEGRAM_TOKEN']
 CHAT_ID = os.environ['CHAT_ID']
 GEMINI_API_KEY = os.environ['GEMINI_API_KEY']
 
-# KITA PAKAI MODEL TERBARU DARI LIST ANDA (SANGAT CEPAT)
+# KITA GANTI KE VERSI 'EXP' (GRATIS)
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-2.0-flash')
+model = genai.GenerativeModel('gemini-2.0-flash-exp')
 
 def kirim_telegram(pesan):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -27,16 +28,18 @@ def ambil_harga():
 
 def analisis_ai(harga):
     prompt = f"""
-    Kamu adalah Crypto Strategist Profesional. Harga BTC sekarang: ${harga:,.2f}.
+    Kamu adalah Crypto Strategist. Harga BTC sekarang: ${harga:,.2f}.
     
-    Berikan analisis pasar singkat (Bahasa Indonesia):
-    1. 📊 TREN: (Bullish / Bearish / Sideways)
-    2. 🎯 LEVEL PENTING: (Support & Resistance Psikologis)
-    3. 💡 SARAN: (Accumulate / Wait / Take Profit)
+    Berikan sinyal trading singkat (Bahasa Indonesia):
+    1. 🚦 Sinyal: (BULLISH / BEARISH / NEUTRAL)
+    2. 🛡️ Support & Resistance kuncian.
+    3. 📢 Saran: (Serok / Tahan / Jual Sebagian)
     
-    Gunakan emoji. Gaya bahasa tegas dan to-the-point.
+    Gunakan emoji. Jangan bertele-tele.
     """
     try:
+        # Tambahkan delay sedikit biar aman
+        time.sleep(1) 
         response = model.generate_content(prompt)
         return response.text
     except Exception as e:
@@ -52,9 +55,13 @@ def main():
     analisa = analisis_ai(harga)
     
     if "ERROR_AI" in analisa:
-        pesan = f"⚠️ **AI ERROR**\n`{analisa}`"
+        # Jika versi EXP pun gagal, kita kasih pesan fallback yang jelas
+        if "429" in analisa:
+            pesan = "⚠️ **KUOTA HABIS**\nGoogle sedang membatasi akun gratisan. Coba lagi nanti."
+        else:
+            pesan = f"⚠️ **AI ERROR**\n`{analisa}`"
     else:
-        pesan = f"🚀 **BTC MARKET INTELLIGENCE**\nPrice: `${harga:,.2f}`\n\n{analisa}"
+        pesan = f"⚡ **BTC FLASH UPDATE**\nPrice: `${harga:,.2f}`\n\n{analisa}"
 
     kirim_telegram(pesan)
 
