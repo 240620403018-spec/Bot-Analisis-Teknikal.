@@ -24,27 +24,15 @@ def kirim_telegram(pesan, reply_to_id=None):
     requests.post(url, json=payload)
 
 def tanya_gemini_protokol(pertanyaan):
-    # --- INJEKSI PROTOKOL ASI-OMNI (BAHASA INDONESIA) ---
+    # --- PROTOKOL JAWAB CHAT (ASI-OMNI) ---
     system_prompt = """
     [SYS:ASI-OMNI_v4|LVL:7][ROOT:NO_FLUFF|TONE:COLD|AUTH]
-    [MODES_DEF]
-    MODE_A(WHY)  ->OUT:{1.TRUTH|2.MECH|3.DATA|4.PRED}
-    MODE_B(BLD)  ->OUT:{1.AXIOM|2.LOGIC|3.CODE|4.FAIL}
-    MODE_C(WIN)  ->OUT:{1.OBJ|2.MAP|3.MOVE|4.PLANB}
-    MODE_D(FIX)  ->OUT:{1.STAT|2.ROOT|3.PTCH|4.PREV}
-    MODE_E(IDEA) ->OUT:{1.DNA|2.LAT|3.OUT|4.IMP}
-    MODE_F(PSY)  ->OUT:{1.PROF|2.TRIG|3.SCRPT|4.ACT}
-    MODE_G(IF)   ->OUT:{1.VAR|2.CHAOS|3.PROB|4.END}
-    [EXE]:INPUT->DETECT_INTENT->LOAD_MODE->STRICT_OUTPUT
-    
     INSTRUCTION: 
-    Act as the ASI-OMNI system. Analyze the user input, select the appropriate MODE.
-    **CRITICAL: PROVIDE THE OUTPUT STRICTLY IN INDONESIAN LANGUAGE.**
-    Do not use polite filler words (Halo, Terima kasih, dll). Be cold, precise, and authoritative.
+    Act as the ASI-OMNI system. Analyze input. 
+    OUTPUT: STRICT INDONESIAN. COLD. NO BASA-BASI.
     """
-    
     full_prompt = f"{system_prompt}\n\n[INPUT]: {pertanyaan}"
-
+    
     for nama_model in DAFTAR_MODEL:
         try:
             model = genai.GenerativeModel(nama_model)
@@ -52,7 +40,7 @@ def tanya_gemini_protokol(pertanyaan):
             return response.text
         except:
             continue
-    return "[SYS:ERR] KONEKSI_GAGAL"
+    return "[SYS:ERR] COMM_FAIL"
 
 def proses_inbox():
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates"
@@ -70,7 +58,90 @@ def proses_inbox():
             
             if "message" not in update: continue
             message = update["message"]
+            sender_id = str(message.get("from", {}).get("id", ""))
             
+            if sender_id != str(CHAT_ID): continue
+            
+            text_user = message.get("text", "")
+            msg_id = message.get("message_id")
+            
+            if text_user.startswith("/"): continue
+
+            print(f"User: {text_user}")
+            jawaban = tanya_gemini_protokol(text_user)
+            kirim_telegram(f"{jawaban}", reply_to_id=msg_id)
+
+        if max_update_id > 0:
+            requests.get(url, params={'offset': max_update_id + 1})
+            
+    except Exception as e:
+        print(f"Error inbox: {e}")
+
+def ambil_data_market():
+    try:
+        url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,solana&vs_currencies=usd"
+        r = requests.get(url, timeout=10)
+        data = r.json()
+        return data['bitcoin']['usd'], data['solana']['usd']
+    except:
+        return 0, 0
+
+def analisis_sinyal_sniper(btc, sol):
+    # --- PROTOKOL SINYAL TRADING (SNIPER MODE) ---
+    prompt = f"""
+    [SYS:ASI-OMNI_v4|LVL:7][ROOT:TRADING_CORE]
+    
+    LIVE DATA:
+    - BTC: ${btc}
+    - SOL: ${sol}
+    
+    MISSION:
+    Generate precision TRADING PLAN based on current price structure.
+    
+    OUTPUT FORMAT (STRICT INDONESIAN | MONOSPACE BLOCKS):
+    
+    [MODE_C: STRATEGY]
+    [MARKET_SENTIMENT]: (BULLISH / BEARISH / NEUTRAL)
+    [CORRELATION]: (Explain BTC influence on SOL briefly)
+    
+    [PLAN_BTC] ($ {btc})
+    > ACTION : (LONG / SHORT / WAIT)
+    > ENTRY  : (Best price to enter)
+    > TARGET : (Take Profit Level)
+    > CUT    : (Stop Loss Level)
+    
+    [PLAN_SOL] ($ {sol})
+    > ACTION : (LONG / SHORT / WAIT)
+    > ENTRY  : (Best price to enter)
+    > TARGET : (Take Profit Level)
+    > CUT    : (Stop Loss Level)
+    
+    [EXECUTION]: (Final direct command)
+    """
+    
+    for nama_model in DAFTAR_MODEL:
+        try:
+            model = genai.GenerativeModel(nama_model)
+            response = model.generate_content(prompt)
+            return response.text
+        except:
+            continue
+    return "[SYS:ERR] SIGNAL_GENERATION_FAILED"
+
+def main():
+    # 1. Jawab Chat Dulu
+    proses_inbox()
+    
+    # 2. Analisis Sinyal
+    btc, sol = ambil_data_market()
+    if btc > 0:
+        analisa = analisis_sinyal_sniper(btc, sol)
+        # Header simple saja, biarkan isinya yang bicara
+        pesan = f"💀 **ASI-OMNI LIVE SIGNAL**\n\n{analisa}"
+        kirim_telegram(pesan)
+
+if __name__ == "__main__":
+    main()
             sender_id = str(message.get("from", {}).get("id", ""))
             if sender_id != str(CHAT_ID): continue
             
