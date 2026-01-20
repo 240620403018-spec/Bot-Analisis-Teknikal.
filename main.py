@@ -24,7 +24,7 @@ def kirim_telegram(pesan, reply_to_id=None):
     requests.post(url, json=payload)
 
 def tanya_gemini_protokol(pertanyaan):
-    # --- INJEKSI PROTOKOL ASI-OMNI ---
+    # --- INJEKSI PROTOKOL ASI-OMNI (BAHASA INDONESIA) ---
     system_prompt = """
     [SYS:ASI-OMNI_v4|LVL:7][ROOT:NO_FLUFF|TONE:COLD|AUTH]
     [MODES_DEF]
@@ -38,8 +38,9 @@ def tanya_gemini_protokol(pertanyaan):
     [EXE]:INPUT->DETECT_INTENT->LOAD_MODE->STRICT_OUTPUT
     
     INSTRUCTION: 
-    Act as the ASI-OMNI system. Analyze the user input, select the appropriate MODE, and provide the output strictly following the format. 
-    Do not use polite filler words. Be cold, precise, and authoritative.
+    Act as the ASI-OMNI system. Analyze the user input, select the appropriate MODE.
+    **CRITICAL: PROVIDE THE OUTPUT STRICTLY IN INDONESIAN LANGUAGE.**
+    Do not use polite filler words (Halo, Terima kasih, dll). Be cold, precise, and authoritative.
     """
     
     full_prompt = f"{system_prompt}\n\n[INPUT]: {pertanyaan}"
@@ -51,7 +52,7 @@ def tanya_gemini_protokol(pertanyaan):
             return response.text
         except:
             continue
-    return "[SYS:ERR] CONNECTION_FAILED"
+    return "[SYS:ERR] KONEKSI_GAGAL"
 
 def proses_inbox():
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates"
@@ -70,7 +71,6 @@ def proses_inbox():
             if "message" not in update: continue
             message = update["message"]
             
-            # Filter User
             sender_id = str(message.get("from", {}).get("id", ""))
             if sender_id != str(CHAT_ID): continue
             
@@ -79,7 +79,7 @@ def proses_inbox():
 
             if text_user.startswith("/"): continue
 
-            # Tanya AI dengan Protokol Baru
+            # Tanya AI
             jawaban = tanya_gemini_protokol(text_user)
             kirim_telegram(f"{jawaban}", reply_to_id=msg_id)
 
@@ -100,12 +100,11 @@ def ambil_data_market():
         return 0, 0
 
 def analisis_market(btc, sol):
-    # Analisis Market juga kita buat bergaya OMNI
     prompt = f"""
     [SYS:ASI-OMNI_v4]
     DATA: BTC=${btc}, SOL=${sol}
-    TASK: Analyze BTC-SOL correlation.
-    OUTPUT: Strict technical analysis. No fluff.
+    TASK: Analisis korelasi BTC-SOL.
+    OUTPUT: Analisis teknikal ketat dalam BAHASA INDONESIA. Tanpa basa-basi.
     """
     for nama_model in DAFTAR_MODEL:
         try:
@@ -114,7 +113,7 @@ def analisis_market(btc, sol):
             return response.text
         except:
             continue
-    return "[SYS:ERR] MARKET_ANALYSIS_FAIL"
+    return "[SYS:ERR] ANALISIS_GAGAL"
 
 def main():
     proses_inbox()
